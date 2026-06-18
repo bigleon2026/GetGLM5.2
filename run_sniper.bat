@@ -1,15 +1,13 @@
 @echo off
-REM GLM 抢购 cron 包装脚本
-REM 在抢购前关闭 Chrome（避免 profile 锁），然后启动抢购
+REM GLM 抢购包装脚本 - 关 Chrome → 跑抢购
+echo [%date% %time%] GLM Sniper start
 
-echo [%date% %time%] GLM Sniper cron trigger
-
-REM 关闭 Chrome（避免 profile 被锁）
+REM 关 Chrome 释放 profile
 taskkill /F /IM chrome.exe 2>nul
-timeout /t 2 /nobreak >nul
+timeout /t 3 /nobreak >nul
 
-REM 运行抢购
+REM 跑抢购（从 config 读时间）
 cd /d F:\Git\GetGLM5.2
-python glm_sniper.py --time "%TARGET_TIME%"
+python glm_sniper.py
 
-echo [%date% %time%] GLM Sniper finished
+echo [%date% %time%] GLM Sniper done

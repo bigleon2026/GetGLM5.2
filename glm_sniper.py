@@ -16,9 +16,8 @@ import sys
 import json
 import time
 import argparse
-import shutil
 from pathlib import Path
-from datetime import datetime, timedelta
+from datetime import datetime
 
 from playwright.sync_api import sync_playwright
 
@@ -204,7 +203,7 @@ def handle_flow(page) -> dict:
     return {"status": "unknown", "state": state}
 
 
-def main_flow(sniper_mode: bool = False, target_time: str = None):
+def main_flow(sniper_mode: bool = False, target_time: str = None, billing_cycle: str = "monthly"):
     """主流程"""
 
     # === 定时逻辑 ===
@@ -225,48 +224,17 @@ def main_flow(sniper_mode: bool = False, target_time: str = None):
     print("🌐 启动 Chrome（使用你的 profile）...")
     SCREENSHOT_DIR.mkdir(exist_ok=True)
 
-    # 复制 profile（避免文件锁冲突）
-    profile_copy = SCRIPT_DIR / "_chrome_profile_temp"
-    if profile_copy.exists():
-        shutil.rmtree(str(profile_copy), ignore_errors=True)
-    profile_copy.mkdir(parents=True, exist_ok=True)
-
-    print("📁 复制 Chrome profile...")
-    try:
-        for item in CHROME_USER_DATA.iterdir():
-            src, dst = str(item), str(profile_copy / item.name)
-            try:
-                if item.is_dir():
-                    if item.name in ["Default", "Profile 1", "Profile 2"]:
-                        shutil.copytree(src, dst, symlinks=False,
-                                        ignore=shutil.ignore_patterns(
-                                            "Cache", "Code Cache", "GPUCache",
-                                            "Service Worker", "Media Cache",
-                                            "History*", "Visited Links",
-                                            "Favicons", "Top Sites", "Web Data*",
-                                            "*.ldb", "*.log", "LOCK", "LOG*",
-                                        ), dirs_exist_ok=True)
-                else:
-                    if item.name not in ["LOCK", "SingletonLock", "SingletonSocket",
-                                          "SingletonCookie", "Local State"]:
-                        shutil.copy2(src, dst)
-            except (PermissionError, OSError):
-                pass
-        print("  ✅ Profile 就绪")
-    except Exception as e:
-        print(f"  ⚠️ Profile 复制失败: {e}，将用空浏览器")
-
+    # 直接用 Chrome profile（Chrome 已关闭，无锁冲突）
     pw = sync_playwright().start()
     context = None
     page = None
 
     try:
         context = pw.chromium.launch_persistent_context(
-            user_data_dir=str(profile_copy),
+            user_data_dir=str(CHROME_USER_DATA),
             headless=HEADLESS,
             channel="chrome",
             viewport={"width": 1280, "height": 900},
-            args=["--no-first-run", "--no-default-browser-check"],
         )
         page = context.pages[0] if context.pages else context.new_page()
 
@@ -307,7 +275,7 @@ def main_flow(sniper_mode: bool = False, target_time: str = None):
         print("=" * 50)
 
         # 1. 切换计费周期
-        switch_billing_cycle(page, BILLING_CYCLE)
+        switch_billing_cycle(page, billing_cycle)
 
         # 2. 点击 Pro 订阅
         if not click_pro_subscribe(page):
@@ -345,8 +313,6 @@ def main_flow(sniper_mode: bool = False, target_time: str = None):
         if context:
             context.close()
         pw.stop()
-        if profile_copy.exists():
-            shutil.rmtree(str(profile_copy), ignore_errors=True)
 
 
 if __name__ == "__main__":
@@ -357,8 +323,8 @@ if __name__ == "__main__":
                         choices=["monthly", "quarterly", "yearly"])
     args = parser.parse_args()
 
-    global BILLING_CYCLE
-    BILLING_CYCLE = args.cycle
+    # 计费周期（模块级变量，在 main_flow 中使用）
+    billing_cycle = args.cycle
 
     # 如果没传 --time 和 --now，尝试读 config
     target = args.time
@@ -368,7 +334,7 @@ if __name__ == "__main__":
             cfg = json.loads(config_file.read_text(encoding="utf-8"))
             target = cfg.get("target_time")
             if cfg.get("billing_cycle"):
-                BILLING_CYCLE = cfg["billing_cycle"]
+                billing_cycle = cfg["billing_cycle"]
             if target:
                 print(f"📋 从 config 读取目标时间: {target}")
             else:
@@ -378,4 +344,4 @@ if __name__ == "__main__":
             print("\n示例: python glm_sniper.py --time '2026-06-19 09:00:00'")
             sys.exit(1)
 
-    main_flow(target_time=target if target else None)
+    main_flow(target_time=target if target else None, billing_cycle=billing_cycle)
