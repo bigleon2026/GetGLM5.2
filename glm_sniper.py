@@ -83,8 +83,41 @@ def main_flow(target_time=None, cycle="monthly"):
         
         poll_start = time.time()
         poll_count = 0
+        refresh_interval = 3  # seconds between page refreshes
+        
         while True:
             poll_count += 1
+            
+            # Check for blocking dialogs (too many users, etc)
+            block_dialog = page.evaluate("""() => {
+                const dialogs = document.querySelectorAll('.el-dialog__wrapper, .el-message-box__wrapper, [class*="dialog"], [class*="modal"]');
+                for (const d of dialogs) {
+                    if (d.style.display !== 'none' && d.offsetParent !== null) {
+                        const t = d.innerText?.substring(0, 200) || '';
+                        if (t.includes('用户太多') || t.includes('排队') || t.includes('拥挤') || t.includes('稍后再试')) {
+                            return {blocking: true, text: t};
+                        }
+                    }
+                }
+                return {blocking: false};
+            }""")
+            
+            if block_dialog.get("blocking"):
+                print(f"  [poll {poll_count}] BLOCKED: {block_dialog['text'][:80]}")
+                # Try to close it
+                page.evaluate("""() => {
+                    const btns = document.querySelectorAll('button');
+                    for (const b of btns) {
+                        const t = b.innerText?.trim();
+                        if (t === '确定' || t === '我知道了' || t === '关闭') {
+                            b.click(); return;
+                        }
+                    }
+                    // fallback: click X button
+                    const close = document.querySelector('.el-dialog__headerbtn, .el-message-box__headerbtn');
+                    if (close) close.click();
+                }""")
+                page.wait_for_timeout(500)
             
             # Check Pro button state
             state = page.evaluate("""() => {
@@ -120,8 +153,8 @@ def main_flow(target_time=None, cycle="monthly"):
                 ss(page, "timeout")
                 return
             
-            # Refresh page every 5 seconds to get latest state
-            if poll_count > 1 and poll_count % 5 == 0:
+            # Refresh page every N seconds to get latest state
+            if poll_count > 1 and poll_count % refresh_interval == 0:
                 page.reload(wait_until="domcontentloaded", timeout=10000)
                 page.wait_for_timeout(1500)
                 # Re-select billing cycle after refresh
