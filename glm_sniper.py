@@ -74,27 +74,67 @@ def main_flow(target_time=None, cycle="monthly"):
                 time.sleep(r - 0.1)
                 while datetime.now() < target_dt: pass
 
-        # === Purchase ===
+        # === Polling wait for button to become active ===
+        # The button shows "暂时售罄" until stock is available
+        # Poll aggressively to catch the moment it flips to "特惠订阅"
         print("=" * 50)
-        print("  GO!")
+        print("  POLLING: waiting for button...")
         print("=" * 50)
-
-        # Refresh page to get latest button state (important for 补货)
-        print("[refresh] reloading page...")
-        page.reload(wait_until="domcontentloaded", timeout=15000)
-        page.wait_for_timeout(2000)
-        print("[refresh] done")
-
-        # Switch billing
-        cmap = {"monthly": "连续包月", "quarterly": "连续包季", "yearly": "连续包年"}
-        target_tab = cmap.get(cycle, "连续包月")
-        print(f"[switch] {target_tab}")
-        page.evaluate("""(t) => {
-            document.querySelectorAll('.switch-tab-item').forEach(i => {
-                if (i.querySelector('span')?.innerText?.trim() === t) i.click();
-            });
-        }""", target_tab)
-        page.wait_for_timeout(600)
+        
+        poll_start = time.time()
+        poll_count = 0
+        while True:
+            poll_count += 1
+            
+            # Check Pro button state
+            state = page.evaluate("""() => {
+                const cards = document.querySelectorAll('.package-card-box');
+                for (const c of cards) {
+                    if (c.innerText.includes('Pro')) {
+                        const btn = c.querySelector('.buy-btn');
+                        if (!btn) return {found: false};
+                        return {
+                            text: btn.innerText?.trim(),
+                            disabled: btn.disabled,
+                            class: btn.className,
+                        };
+                    }
+                }
+                return {found: false};
+            }""")
+            
+            btn_text = state.get("text", "")
+            elapsed = time.time() - poll_start
+            
+            if poll_count % 10 == 1 or "售罄" not in btn_text:
+                print(f"  [poll {poll_count} | {elapsed:.0f}s] btn='{btn_text}' disabled={state.get('disabled')}")
+            
+            # Button is ready!
+            if not state.get("disabled") and "售罄" not in btn_text and "订阅" in btn_text:
+                print(f"  >>> BUTTON ACTIVE after {elapsed:.0f}s! <<<")
+                break
+            
+            # Timeout after 30 minutes
+            if elapsed > 1800:
+                print("  [timeout] 30 min no stock")
+                ss(page, "timeout")
+                return
+            
+            # Refresh page every 5 seconds to get latest state
+            if poll_count > 1 and poll_count % 5 == 0:
+                page.reload(wait_until="domcontentloaded", timeout=10000)
+                page.wait_for_timeout(1500)
+                # Re-select billing cycle after refresh
+                cmap = {"monthly": "连续包月", "quarterly": "连续包季", "yearly": "连续包年"}
+                target_tab = cmap.get(cycle, "连续包月")
+                page.evaluate("""(t) => {
+                    document.querySelectorAll('.switch-tab-item').forEach(i => {
+                        if (i.querySelector('span')?.innerText?.trim() === t) i.click();
+                    });
+                }""", target_tab)
+                page.wait_for_timeout(500)
+            else:
+                time.sleep(1)
 
         # Click Pro
         print("[click] Pro subscribe")
