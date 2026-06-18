@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 screenshots/
 _chrome_profile/
+auth_state.json
+sniper_test.log

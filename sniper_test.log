@@ -1,8 +1,0 @@
-[OK] 已登录
-==================================================
-  GO!
-==================================================
-[switch] 连续包月
-[click] Pro subscribe
-  FAIL: {'ok': False, 'r': 'disabled'}
-  [screenshot: 225231_click_failed.png]
