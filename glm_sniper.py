@@ -139,6 +139,17 @@ def main_flow(target_time=None, cycle="monthly"):
             btn_text = state.get("text", "")
             elapsed = time.time() - poll_start
             
+            # Check for inline "用户太多" hints on page (not a dialog)
+            page_text = page.evaluate("""() => document.body.innerText?.substring(0, 1000) || ''""")
+            too_many = any(kw in page_text for kw in ["用户太多", "当前访问人数过多", "稍后再试", "排队中"])
+            
+            if too_many:
+                refresh_interval = 2  # refresh faster when busy
+                if poll_count % 10 == 1:
+                    print(f"  [poll {poll_count} | {elapsed:.0f}s] 用户太多，加速刷新 (interval={refresh_interval}s)")
+            else:
+                refresh_interval = 3  # normal pace
+            
             if poll_count % 10 == 1 or "售罄" not in btn_text:
                 print(f"  [poll {poll_count} | {elapsed:.0f}s] btn='{btn_text}' disabled={state.get('disabled')}")
             
