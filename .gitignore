@@ -1,0 +1,6 @@
+_chrome_profile_temp/
+screenshots/
+cookies_bigmodel.json
+__pycache__/
+*.pyc
+screenshots/
