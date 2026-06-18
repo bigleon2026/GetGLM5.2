@@ -4,3 +4,4 @@ cookies_bigmodel.json
 __pycache__/
 *.pyc
 screenshots/
+_chrome_profile/
