@@ -79,6 +79,12 @@ def main_flow(target_time=None, cycle="monthly"):
         print("  GO!")
         print("=" * 50)
 
+        # Refresh page to get latest button state (important for 补货)
+        print("[refresh] reloading page...")
+        page.reload(wait_until="domcontentloaded", timeout=15000)
+        page.wait_for_timeout(2000)
+        print("[refresh] done")
+
         # Switch billing
         cmap = {"monthly": "连续包月", "quarterly": "连续包季", "yearly": "连续包年"}
         target_tab = cmap.get(cycle, "连续包月")
